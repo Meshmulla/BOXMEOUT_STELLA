@@ -125,7 +125,11 @@ pub fn market_created(
 /// - Topics: [symbol!("mkt_meta_upd"), market_id as Symbol]
 /// - Data:   (market_id: u64, updated_by: Address)
 pub fn market_metadata_updated(env: &Env, market_id: u64, updated_by: Address) {
-    todo!("Emit market_metadata_updated event")
+    let topics = (
+        soroban_sdk::Symbol::new(env, "mkt_metadata_updated"),
+        market_id,
+    );
+    env.events().publish(topics, (updated_by,));
 }
 
 /// Emitted when an oracle address is set for a specific market.

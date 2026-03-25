@@ -249,7 +249,65 @@ impl PredictionMarketContract {
         market_id: u64,
         metadata: MarketMetadata,
     ) -> Result<(), PredictionMarketError> {
-        todo!("Implement market metadata update")
+        // Require auth from the caller
+        caller.require_auth();
+
+        // Load Global Config to check for admin/operators
+        let config: Config = env
+            .storage()
+            .persistent()
+            .get(&crate::storage::DataKey::Config)
+            .ok_or(PredictionMarketError::NotInitialized)?;
+
+        // Load specific Market
+        let mut market: Market = env
+            .storage()
+            .persistent()
+            .get(&crate::storage::DataKey::Market(market_id))
+            .ok_or(PredictionMarketError::MarketNotFound)?;
+
+        // Authorization check: Admin, Operator, or Market Creator
+        let is_admin = caller == config.admin;
+        let is_operator = env
+            .storage()
+            .persistent()
+            .get(&crate::storage::DataKey::IsOperator(caller.clone()))
+            .unwrap_or(false);
+        let is_creator = caller == market.creator;
+
+        if !is_admin && !is_operator && !is_creator {
+            return Err(PredictionMarketError::Unauthorized);
+        }
+
+        // State validation: cannot update metadata once Resolved or Cancelled
+        if market.status == crate::types::MarketStatus::Resolved
+            || market.status == crate::types::MarketStatus::Cancelled
+        {
+            return Err(PredictionMarketError::AlreadyResolved);
+        }
+
+        // Validate metadata field lengths
+        if metadata.category.len() > 32
+            || metadata.tags.len() > 128
+            || metadata.image_url.len() > 256
+            || metadata.description.len() > 1024
+            || metadata.source_url.len() > 256
+        {
+            return Err(PredictionMarketError::MetadataTooLong);
+        }
+
+        // Apply new metadata
+        market.metadata = metadata;
+
+        // Persist updated market
+        env.storage()
+            .persistent()
+            .set(&crate::storage::DataKey::Market(market_id), &market);
+
+        // Emit metadata update event
+        crate::events::market_metadata_updated(&env, market_id, caller);
+
+        Ok(())
     }
 
     /// Override the oracle address for a specific market.

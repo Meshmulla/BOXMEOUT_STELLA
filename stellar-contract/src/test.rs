@@ -127,3 +127,108 @@ fn test_set_treasury_unauthorized() {
 
     client.set_treasury(&new_treasury);
 }
+
+fn create_test_market(env: &Env, client_address: &Address, market_id: u64, creator: &Address) -> Market {
+    let market = Market {
+        market_id,
+        creator: creator.clone(),
+        question: soroban_sdk::String::from_str(env, "Will it rain?"),
+        betting_close_time: 1000,
+        resolution_deadline: 2000,
+        dispute_window_secs: 3600,
+        outcomes: soroban_sdk::vec![env],
+        status: crate::types::MarketStatus::Open,
+        winning_outcome_id: None,
+        protocol_fee_pool: 0,
+        lp_fee_pool: 0,
+        creator_fee_pool: 0,
+        total_collateral: 0,
+        total_lp_shares: 0,
+        metadata: MarketMetadata {
+            category: soroban_sdk::String::from_str(env, "Weather"),
+            tags: soroban_sdk::String::from_str(env, "rain,weather"),
+            image_url: soroban_sdk::String::from_str(env, "https://example.com/image.png"),
+            description: soroban_sdk::String::from_str(env, "Will it rain tomorrow?"),
+            source_url: soroban_sdk::String::from_str(env, "https://weather.com"),
+        },
+    };
+
+    env.as_contract(client_address, || {
+        env.storage().persistent().set(&DataKey::Market(market_id), &market);
+    });
+
+    market
+}
+
+#[test]
+fn test_update_market_metadata_success_creator() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (_admin, client) = setup_test(&env);
+    let creator = Address::generate(&env);
+    let market_id = 1u64;
+    create_test_market(&env, &client.address, market_id, &creator);
+
+    let new_metadata = MarketMetadata {
+        category: soroban_sdk::String::from_str(&env, "Science"),
+        tags: soroban_sdk::String::from_str(&env, "weather,science"),
+        image_url: soroban_sdk::String::from_str(&env, "https://example.com/new.png"),
+        description: soroban_sdk::String::from_str(&env, "New description"),
+        source_url: soroban_sdk::String::from_str(&env, "https://science.com"),
+    };
+
+    client.update_market_metadata(&creator, &market_id, &new_metadata);
+
+    // Verify storage update
+    env.as_contract(&client.address, || {
+        let updated_market: Market = env.storage().persistent().get(&DataKey::Market(market_id)).unwrap();
+        assert_eq!(updated_market.metadata.category, soroban_sdk::String::from_str(&env, "Science"));
+    });
+}
+
+#[test]
+#[should_panic]
+fn test_update_market_metadata_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (_admin, client) = setup_test(&env);
+    let creator = Address::generate(&env);
+    let unauthorized_user = Address::generate(&env);
+    let market_id = 1u64;
+    create_test_market(&env, &client.address, market_id, &creator);
+
+    let new_metadata = MarketMetadata {
+        category: soroban_sdk::String::from_str(&env, "Science"),
+        tags: soroban_sdk::String::from_str(&env, "weather"),
+        image_url: soroban_sdk::String::from_str(&env, "url"),
+        description: soroban_sdk::String::from_str(&env, "desc"),
+        source_url: soroban_sdk::String::from_str(&env, "src"),
+    };
+
+    // This should panic due to unauthorized check
+    client.update_market_metadata(&unauthorized_user, &market_id, &new_metadata);
+}
+
+#[test]
+#[should_panic]
+fn test_update_market_metadata_too_long() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (admin, client) = setup_test(&env);
+    let market_id = 1u64;
+    create_test_market(&env, &client.address, market_id, &admin);
+
+    let long_category = soroban_sdk::String::from_str(&env, "this_category_is_way_too_long_for_the_limit");
+    let new_metadata = MarketMetadata {
+        category: long_category,
+        tags: soroban_sdk::String::from_str(&env, "weather"),
+        image_url: soroban_sdk::String::from_str(&env, "url"),
+        description: soroban_sdk::String::from_str(&env, "desc"),
+        source_url: soroban_sdk::String::from_str(&env, "src"),
+    };
+
+    client.update_market_metadata(&admin, &market_id, &new_metadata);
+}
