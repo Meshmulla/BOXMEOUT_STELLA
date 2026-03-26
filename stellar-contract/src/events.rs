@@ -33,7 +33,8 @@ pub fn initialized(env: &Env, admin: Address) {
 /// - Topics: [symbol!("admin_updated")]
 /// - Data:   (old_admin: Address, new_admin: Address)
 pub fn admin_updated(env: &Env, old_admin: Address, new_admin: Address) {
-    todo!("Emit admin_updated event")
+    let topics = (soroban_sdk::Symbol::new(env, "admin_updated"),);
+    env.events().publish(topics, (old_admin, new_admin));
 }
 
 /// Emitted when the fee configuration is changed.
@@ -56,7 +57,8 @@ pub fn fee_config_updated(
 /// - Topics: [symbol!("treasury_upd")]
 /// - Data:   (new_treasury: Address)
 pub fn treasury_updated(env: &Env, new_treasury: Address) {
-    todo!("Emit treasury_updated event")
+    let topics = (soroban_sdk::Symbol::new(env, "treasury_updated"),);
+    env.events().publish(topics, (new_treasury,));
 }
 
 /// Emitted when the global emergency pause is activated.
@@ -123,7 +125,11 @@ pub fn market_created(
 /// - Topics: [symbol!("mkt_meta_upd"), market_id as Symbol]
 /// - Data:   (market_id: u64, updated_by: Address)
 pub fn market_metadata_updated(env: &Env, market_id: u64, updated_by: Address) {
-    todo!("Emit market_metadata_updated event")
+    let topics = (
+        soroban_sdk::Symbol::new(env, "mkt_metadata_updated"),
+        market_id,
+    );
+    env.events().publish(topics, (updated_by,));
 }
 
 /// Emitted when an oracle address is set for a specific market.
